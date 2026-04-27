@@ -35,20 +35,35 @@ exports.index = function (req, res, next) {
 };
 
 exports.loginHandler = function (req, res, next) {
-  if (validator.isEmail(req.body.username)) {
-    User.find({ username: req.body.username, password: req.body.password }, function (err, users) {
-      if (users.length > 0) {
-        const redirectPage = req.body.redirectPage
-        const session = req.session
-        const username = req.body.username
-        return adminLoginSuccess(redirectPage, session, username, res)
-      } else {
-        return res.status(401).send()
-      }
-    });
-  } else {
-    return res.status(401).send()
+
+  // Step 1: Convert to safe strings
+  const username = String(req.body.username || '');
+  const password = String(req.body.password || '');
+
+  // Step 2: Validate email
+  if (!validator.isEmail(username)) {
+    return res.status(400).send("Invalid email");
   }
+
+  // Step 3: Block Mongo operators ($ injection)
+  if (username.includes('$') || password.includes('$')) {
+    return res.status(400).send("Invalid input");
+  }
+
+  // Step 4: Safe query
+  User.findOne({ username: username, password: password }, function (err, user) {
+
+    if (err) return next(err);
+
+    if (user) {
+      const redirectPage = req.body.redirectPage;
+      const session = req.session;
+
+      return adminLoginSuccess(redirectPage, session, username, res);
+    } else {
+      return res.status(401).send();
+    }
+  });
 };
 
 function adminLoginSuccess(redirectPage, session, username, res) {
